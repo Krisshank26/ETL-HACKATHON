@@ -1,4 +1,4 @@
-import { jsonRepair } from 'json-repair'; // We'll install this: npm install json-repair
+import { jsonrepair } from 'jsonrepair'; // We'll install this: npm install json-repair
 
 // This regex finds things that *look* like JSON objects or arrays.
 // It's non-greedy (.*?) and matches across lines (s flag).
@@ -30,7 +30,7 @@ export async function processJsonBlocks(context) {
       // 2. "Handling Mismanagement": The parse failed. Try to repair it.
       // This handles the "MALFORMED JSON FRAGMENT" from the guide 
       try {
-        const repairedJson = jsonRepair(blockMatch);
+        const repairedJson = jsonrepair(blockMatch);
         const parsedData = JSON.parse(repairedJson);
 
         // Repair was successful!

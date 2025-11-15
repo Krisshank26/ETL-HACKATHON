@@ -1,20 +1,30 @@
-import express from "express" 
-import configDB from "./src/db/dbConfig.js" 
-import dotenv from "dotenv" 
+import express from "express"
+import dotenv from "dotenv"
 import multer from "multer";
 import { handleUpload } from './uploadHandler.js';
+import { connectToDb } from './src/db/mongoClient.js'; 
 
-const app= express() 
+const app = express()
 const upload = multer({ dest: 'uploads/' });
 
-app.use(express.json() ) 
-dotenv.config() 
-
-configDB() 
+app.use(express.json())
+dotenv.config()
 
 app.post("/upload", upload.single('file'), handleUpload);
 
-app.listen(8080, ()=> 
+const port = 3000;
+
+connectToDb() 
+  /* .then(() => {
+    app.listen(port, () => {
+      console.log(`Server Is Listening On PORT ${port}`);
+    });
+  })
+  .catch((error) => {
+    console.error("Failed to start server", error);
+    process.exit(1);
+  }); */ 
+  app.listen(port, ()=> 
 { 
-    console.log("Server Is Listening On PORT 8080 " ) 
+    console.log("Server Is Listening On PORT "+ port ) ; 
 } ) 

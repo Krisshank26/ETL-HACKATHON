@@ -1,4 +1,4 @@
-import pdf from 'pdf-parse';
+import pdf from 'pdf-parse-new';
 import { processJsonBlocks } from './blockProcessors/jsonProcessor.js';
 import { processHtmlTableBlocks } from './blockProcessors/htmlTableProcessor.js';
 import { processCsvBlocks } from './blockProcessors/csvProcessor.js';
@@ -11,8 +11,8 @@ import { processKeyValueBlocks } from './blockProcessors/keyValueProcessor.js';
 const processors = [
   processJsonBlocks,
   processHtmlTableBlocks,
-//   processCsvBlocks,
-//   processKeyValueBlocks,
+  processCsvBlocks,
+  processKeyValueBlocks,
   // ... add new processors here
 ];
 
