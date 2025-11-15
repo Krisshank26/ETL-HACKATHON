@@ -1,0 +1,41 @@
+INLINE JSON (well-formed, v2)
+{
+"id": "prod-1001",
+"title": "Widget A",
+"slug": "widget-a",
+"pricing": {
+"price": 9.99,
+"currency": "USD"
+},
+"tags": ["gadget", "home", "widget", "sale"],
+"dimensions": {"w mm": 120, "h mm": 45, "d mm": 30},
+"release date": "2025-11-01",
+"metadata": {
+"imported_from": "example-scrape-v2",
+"ingested_at": "2025-11-20T09:10:00+05:30"
+},
+"views": "N/A"
+}
+
+HTML SNIPPET (embedded table)
+
+<table>
+<thead><tr><th>author</th><th>rating</th><th>comment</th><th>date</th></tr></thead>
+<tbody>
+<tr><td>Alice</td><td>5</td><td>Excellent product.</td><td>2025-10-20</td></tr>
+</tbody>
+</table>
+
+CSV-LIKE SECTION (v2 - new column "warehouse")
+author, rating, helpful votes, date, warehouse
+Dave, 4, 2, 2025-10-18, W-9
+Eve, 2, 0, 18-10-2025, W-9
+Mallory, 5, 10, 2025/10/17, W-12
+Frank, 3, 1, 2025-10-19, W-9
+
+KEY-VALUE KVP BLOCK (v2 - new field)
+title: Widget A
+price: 9.99
+currency: USD
+availability: Out of Stock
+new_field: "This is new"

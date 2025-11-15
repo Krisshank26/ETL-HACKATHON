@@ -1,4 +1,3 @@
-// uploadHandler.js
 import fs from 'fs/promises';
 import { parseFileContent } from './parser.js';
 import { getDb } from './src/db/mongoClient.js';
@@ -6,48 +5,49 @@ import { manageSchemaEvolution } from './schemaManager.js';
 
 export async function handleUpload(req, res) {
   try {
-    const { source_id, version } = req.body;
-    const file = req.file; // File metadata from multer
+    const { source_id } = req.body;
+    const file = req.file;
 
     if (!file) {
       return res.status(400).send({ error: 'No file uploaded.' });
     }
+    if (!source_id) {
+      return res.status(400).send({ error: 'Missing source_id.' });
+    }
 
-    // 1. Read the file content
     const fileContent = await fs.readFile(file.path, 'utf-8');
-    
-    // 2. Parse the unstructured content (The "Magic")
-    // This is the most complex step
-    const { parsedData, fragmentsSummary } = await parseFileContent(fileContent, file.mimetype); 
+    const { parsedData, fragmentsSummary } = await parseFileContent(fileContent, file.mimetype);
 
-    // // 3. Manage Schema Generation & Evolution
-    // // This function will diff the new data against the old schema
-    // // and create a new schema version if needed. 
-    const { schemaId, migrationNotes } = await manageSchemaEvolution(source_id, parsedData); 
+    const { schemaId, notes } = await manageSchemaEvolution(source_id, parsedData);
 
-    // // 4. Ingest the Data
-    // // Use a dynamic collection name based on the source_id 
+    const documentsToInsert = parsedData.filter(
+      item => typeof item === 'object' && item !== null && !Array.isArray(item)
+    );
+    // --- END OF FIX ---
+
     const dataCollectionName = `data_${source_id}`;
-    const db = await getDb();
+    const db = getDb();
     
-    // // MongoDB's native driver is schema-less. Just insert the data.
-    // // If parsedData is an array, use insertMany
-    await db.collection(dataCollectionName).insertMany(parsedData);
+    if (documentsToInsert.length > 0) {
+      await db.collection(dataCollectionName).insertMany(documentsToInsert);
+    } else {
+      console.log(`No valid documents found to insert for source_id: ${source_id}`);
+    }
 
-    // // 5. Clean up the temp file
     await fs.unlink(file.path);
 
-    // // 6. Send the success response 
     res.status(201).json({
       status: "ok",
       source_id: source_id,
-      file_id: file.filename, // Use multer's generated ID or create your own
+      file_id: file.filename,
       schema_id: schemaId,
-      parsed_fragments_summary: fragmentsSummary 
+      migration_notes: notes,
+      parsed_fragments_summary: fragmentsSummary,
+      documents_inserted: documentsToInsert.length
     });
 
   } catch (error) {
-    console.error('Upload failed:', error);
+    console.error('Upload failed:', error); 
     res.status(500).send({ error: 'Internal server error' });
   }
 }

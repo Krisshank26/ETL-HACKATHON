@@ -1,95 +1,104 @@
-// schemaManager.js
 import { getDb } from './src/db/mongoClient.js';
-import { diff } from 'deep-diff'; // A library to compare objects
+import diff from 'deep-diff';
 
 const SCHEMA_COLLECTION = '_schemas';
 
+/**
+ * Takes the `parsedData` array and generates a schema.
+ * This is the "candidate" schema.
+ */
+function generateSchemaFromData(parsedData) {
+  const fieldMap = new Map();
+
+  // Loop through every record and every key
+  for (const record of parsedData) {
+    if (typeof record !== 'object' || record === null) continue;
+
+    for (const key of Object.keys(record)) {
+      const value = record[key];
+      const type = getMongoType(value);
+
+      if (!fieldMap.has(key)) {
+        // First time seeing this field
+        fieldMap.set(key, { 
+          types: new Set([type]), 
+          example_value: value 
+        });
+      } else {
+        // Field already seen, add the new type if it's different
+        fieldMap.get(key).types.add(type);
+      }
+    }
+  }
+
+  // Convert the map to the final schema field array
+  const fields = [];
+  for (const [name, def] of fieldMap.entries()) {
+    const typeList = Array.from(def.types);
+    fields.push({
+      name: name,
+      path: `$.${name}`,
+      type: typeList.length === 1 ? typeList[0] : typeList, // Handle mixed types [cite: 314-323]
+      nullable: def.types.has('null'),
+      example_value: def.example_value,
+      confidence: 1.0 // Placeholder
+    });
+  }
+  return { fields };
+}
+
+/**
+ * Main function. Compares new data against the latest schema
+ * and saves a new version if changes are detected.
+ */
 export async function manageSchemaEvolution(source_id, parsedData) {
-  const db = await getDb();
+  const db = getDb();
   const schemaCollection = db.collection(SCHEMA_COLLECTION);
 
-  // 1. Get the LATEST current schema for this source_id
+  // 1. Generate a "candidate" schema from the new data
+  const candidateSchema = generateSchemaFromData(parsedData);
+  candidateSchema.source_id = source_id;
+  candidateSchema.generated_at = new Date();
+  candidateSchema.compatible_dbs = ["mongodb"];
+
+  // 2. Get the LATEST current schema for this source_id
   const currentSchema = await schemaCollection.findOne(
     { source_id: source_id },
     { sort: { version: -1 } }
   );
 
-  // 2. Generate a "candidate" schema from the NEW data
-  const candidateSchema = generateSchemaFromData(parsedData, source_id);
-
+  // 3. Handle First Upload (no current schema)
   if (!currentSchema) {
-    // First upload for this source_id. Save as v1.
     candidateSchema.version = 1;
-    candidateSchema.generated_at = new Date(); 
+    candidateSchema.migration_notes = "Initial schema creation.";
     const result = await schemaCollection.insertOne(candidateSchema);
-    return { schemaId: result.insertedId, migrationNotes: "Initial schema creation." };
+    return { schemaId: result.insertedId, notes: candidateSchema.migration_notes };
   }
 
-  // 3. Compare new schema with current schema [cite: 111, 113]
-  // We only compare the 'fields' part
+  // 4. Compare new schema with current schema
+  // We only compare the 'fields' part [cite: 104-107]
   const changes = diff(currentSchema.fields, candidateSchema.fields);
 
+  // 5. Handle Idempotency (Phase 7) - No Changes
   if (!changes) {
-    // No changes detected. Return the existing schema ID. 
-    // This handles idempotency for identical content.
-    return { schemaId: currentSchema._id, migrationNotes: "No schema changes detected." };
+    // No changes detected. Return the existing schema ID.
+    return { schemaId: currentSchema._id, notes: "No schema changes detected." };
   }
 
-  // 4. Changes detected! Create a new schema version. [cite: 77]
+  // 6. Handle Evolution (Phase 3) - Changes Detected!
   const newVersion = currentSchema.version + 1;
   candidateSchema.version = newVersion;
-  candidateSchema.generated_at = new Date();
-  
-  // Add migration notes [cite: 72, 158]
-  candidateSchema.migration_notes = generateMigrationNotes(changes); 
+  candidateSchema.migration_notes = generateMigrationNotes(changes); // Create notes
   
   const result = await schemaCollection.insertOne(candidateSchema);
-  return { schemaId: result.insertedId, migrationNotes: candidateSchema.migration_notes };
+  return { schemaId: result.insertedId, notes: candidateSchema.migration_notes };
 }
 
-/**
- * Generates a schema definition from an array of data objects.
- */
-function generateSchemaFromData(data, source_id) {
-  const fieldMap = new Map();
-
-  // Loop through every record to discover all fields and types
-  data.forEach(record => {
-    Object.keys(record).forEach(key => {
-      const value = record[key];
-      const type = getMongoType(value);
-      
-      if (!fieldMap.has(key)) {
-        fieldMap.set(key, { name: key, types: new Set(), confidence: 0.0, example_value: value });
-      }
-      
-      const fieldDef = fieldMap.get(key);
-      fieldDef.types.add(type);
-      fieldDef.confidence = 1.0; // Confidence logic would be more complex [cite: 48]
-    });
-  });
-
-  // Format for MongoDB schema document
-  const fields = Array.from(fieldMap.values()).map(def => ({
-    name: def.name,
-    path: `$.${def.name}`, // [cite: 154]
-    type: def.types.size > 1 ? Array.from(def.types) : def.types.values().next().value, // Handles mixed types [cite: 88, 166]
-    nullable: def.types.has('null'),
-    example_value: def.example_value,
-    confidence: def.confidence,
-  }));
-
-  return {
-    source_id: source_id,
-    compatible_dbs: ["mongodb"], // [cite: 69, 152]
-    fields: fields,
-    primary_key_candidates: ['id', '_id'], // [cite: 71, 157]
-  };
-}
+// --- Helper Functions ---
 
 function getMongoType(value) {
   if (value === null || value === undefined) return 'null';
-  if (typeof value === 'number') return 'double'; // or 'int'/'long'
+  if (typeof value === 'number') return 'double';
   if (typeof value === 'string') return 'string';
   if (typeof value === 'boolean') return 'bool';
   if (value instanceof Date) return 'date';
@@ -99,7 +108,15 @@ function getMongoType(value) {
 }
 
 function generateMigrationNotes(changes) {
-  // Logic to turn the `diff` output into human-readable notes
-  // E.g., "Added field 'price'. Removed field 'price_usd'." [cite: 173]
-  return "Schema updated with changes.";
+  const notes = [];
+  for (const change of changes) {
+    if (change.kind === 'N') {
+      notes.push(`Added field: '${change.path.join('.')}'`);
+    } else if (change.kind === 'D') {
+      notes.push(`Removed field: '${change.path.join('.')}'`);
+    } else if (change.kind === 'E') {
+      notes.push(`Changed field type: '${change.path.join('.')}'`);
+    }
+  }
+  return notes.join('\n');
 }
