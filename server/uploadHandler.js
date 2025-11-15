@@ -1,7 +1,7 @@
 // uploadHandler.js
 import fs from 'fs/promises';
 import { parseFileContent } from './parser.js';
-import { getDb } from './mongoClient.js';
+import { getDb } from './src/db/mongoClient.js';
 import { manageSchemaEvolution } from './schemaManager.js';
 
 export async function handleUpload(req, res) {
@@ -20,24 +20,24 @@ export async function handleUpload(req, res) {
     // This is the most complex step
     const { parsedData, fragmentsSummary } = await parseFileContent(fileContent, file.mimetype); 
 
-    // 3. Manage Schema Generation & Evolution
-    // This function will diff the new data against the old schema
-    // and create a new schema version if needed. [cite: 10]
+    // // 3. Manage Schema Generation & Evolution
+    // // This function will diff the new data against the old schema
+    // // and create a new schema version if needed. 
     const { schemaId, migrationNotes } = await manageSchemaEvolution(source_id, parsedData); 
 
-    // 4. Ingest the Data
-    // Use a dynamic collection name based on the source_id 
+    // // 4. Ingest the Data
+    // // Use a dynamic collection name based on the source_id 
     const dataCollectionName = `data_${source_id}`;
     const db = await getDb();
     
-    // MongoDB's native driver is schema-less. Just insert the data.
-    // If parsedData is an array, use insertMany
+    // // MongoDB's native driver is schema-less. Just insert the data.
+    // // If parsedData is an array, use insertMany
     await db.collection(dataCollectionName).insertMany(parsedData);
 
-    // 5. Clean up the temp file
+    // // 5. Clean up the temp file
     await fs.unlink(file.path);
 
-    // 6. Send the success response [cite: 61, 141-147]
+    // // 6. Send the success response 
     res.status(201).json({
       status: "ok",
       source_id: source_id,
