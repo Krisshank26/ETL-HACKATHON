@@ -5,7 +5,7 @@ import { handleUpload } from './uploadHandler.js';
 import { connectToDb, getDb } from './src/db/mongoClient.js'; // Import getDb
 
 const app = express()
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: 'uploads/' }); 
 
 app.use(express.json())
 dotenv.config()

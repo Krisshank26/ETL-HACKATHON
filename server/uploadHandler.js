@@ -6,7 +6,7 @@ import { manageSchemaEvolution } from './schemaManager.js';
 export async function handleUpload(req, res) {
   try {
     const { source_id } = req.body;
-    const file = req.file;
+    const file = req.file; 
 
     if (!file) {
       return res.status(400).send({ error: 'No file uploaded.' });
@@ -15,7 +15,11 @@ export async function handleUpload(req, res) {
       return res.status(400).send({ error: 'Missing source_id.' });
     }
 
-    const fileContent = await fs.readFile(file.path, 'utf-8');
+    const fileContent = await fs.readFile(file.path); 
+
+    console.log(`Processing file: ${file.originalname}, mimetype: ${file.mimetype}`);
+
+    // console.log(fileContent ) ; 
     const { parsedData, fragmentsSummary } = await parseFileContent(fileContent, file.mimetype);
 
     const { schemaId, notes } = await manageSchemaEvolution(source_id, parsedData);
@@ -46,8 +50,11 @@ export async function handleUpload(req, res) {
       documents_inserted: documentsToInsert.length
     });
 
-  } catch (error) {
-    console.error('Upload failed:', error); 
+  } catch (error) { 
+    console.error('--- UPLOAD FAILED ---');
+    console.error(`Error Name: ${error.name}`);
+    console.error(`Error Message: ${error.message}`);
+    console.error(error.stack);
     res.status(500).send({ error: 'Internal server error' });
   }
 }

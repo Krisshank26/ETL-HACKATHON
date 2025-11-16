@@ -19,19 +19,21 @@ const processors = [
 export async function parseFileContent(content, mimetype) {
   let textContent = content;
 
-  // 1. Pre-processing: Get raw text
   if (mimetype === 'application/pdf') {
-    // This handles text-based PDFs. Scanned PDFs (OCR) would
-    // require a library like tesseract.js
-    const data = await pdf(content);
-    textContent = data.text;
-  } 
-  else 
-  { 
-    // For other mimetypes (txt, md ) we assume content is already text 
-
-    textContent= content.toString('utf-8' ) 
-  } 
+    try {
+      console.log('Parsing as PDF...');
+      const data = await pdf(content);
+      textContent = data.text; // The extracted text
+    } catch (pdfError) {
+      console.error('PDF parsing failed:', pdfError.message);
+      // Throw a specific error if pdf-parse fails
+      throw new Error(`Failed to parse PDF: ${pdfError.message}`);
+    }
+  } else {
+    // If it's .txt, .md, .csv, etc., convert the Buffer to a string
+    console.log('Parsing as text...');
+    textContent = content.toString('utf-8');
+  }
 
   // 2. Initialize the parsing context
   // Each processor will modify this object.
@@ -62,27 +64,10 @@ export async function parseFileContent(content, mimetype) {
 
   // 5. Data Cleaning & Canonicalization
   // We apply this *after* all blocks are parsed.
-  const cleanedData = context.allParsedData.map(record => cleanRecord(record));
+  // const cleanedData = context.allParsedData.map(record => cleanRecord(record));
 
   return { 
-    parsedData: cleanedData, 
+    parsedData: context.allParsedData, 
     fragmentsSummary: context.fragmentsSummary 
   };
-}
-
-function cleanRecord(record) {
-  // Example: Normalize prices
-  // This is where you'd handle "9.99 USD", "$9.99", "9,99"
-  // from the test guide [cite: 172-174]
-  if (record.price && typeof record.price === 'string') {
-    record.price = parseFloat(record.price.replace('$', '').replace('USD', '').replace(',', '.').trim());
-  }
-
-  // Example: Consolidate repeated fields 
-  if (record.price_usd && !record.price) {
-    record.price = record.price_usd;
-    delete record.price_usd;
-  }
-  
-  return record;
 }
